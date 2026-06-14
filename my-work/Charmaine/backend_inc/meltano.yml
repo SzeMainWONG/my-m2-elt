@@ -1,0 +1,40 @@
+default_environment: dev
+project_id: 019ec59f-2cfc-7432-b003-7032112f37f6
+environments:
+- name: dev
+- name: staging
+- name: prod
+python: python3.11
+plugins:
+  extractors:
+  - name: tap-postgres
+    variant: meltanolabs
+    pip_url: meltanolabs-tap-postgres
+    config:
+      database: postgres
+      filter_schemas:
+      - public
+      host: aws-1-ap-northeast-1.pooler.supabase.com
+      port: 5432
+      user: postgres.zxjrsvvxhzwhrgtboukq
+    select:
+    - your_table_name.*
+    - '*.*'
+#    metadata:
+#      your_table:
+#        replication-method: INCREMENTAL
+#        replication-key: updated_at
+# to do incremental, need to add column updated_at to all tables in Supabase
+  loaders:
+  - name: target-bigquery
+    variant: z3z1ma
+    pip_url: git+https://github.com/z3z1ma/target-bigquery.git setuptools<80
+    config:
+      batch_size: 104857600
+      credentials_path: /home/szemainwong/mainitexp1-856bc2c1e42f.json
+      dataset: brazil_ecommerce_supabase
+      denormalized: true
+      flattening_enabled: true
+      flattening_max_depth: 1
+      method: batch_job
+      project: mainitexp1
