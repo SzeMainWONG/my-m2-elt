@@ -35,11 +35,11 @@ models:
     #example:
     #  +materialized: view
     stage:
-      +materialized: view
-      +schema: stage
-    gold_mart:
       +materialized: table
-      +schema: gold_mart
+      +schema: stage
+#    star_gold:
+#      +materialized: table
+#      +schema: gold_mart
 
 #at project level, log all fails for data tests, 
 #this will create a table in warehouse (BigQuery in my use case) with 

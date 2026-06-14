@@ -4,10 +4,9 @@
 {{
     config(
         target_schema='snapshots',
-        unique_key='product_id',
+        unique_key='id',
         strategy='check',
         check_cols=[
-            'product_id',
             'product_category',
             'product_weight_g',
             'product_length_cm',
@@ -16,5 +15,5 @@
         ],
     )
 }}
-SELECT * FROM {{ ref('stg_products') }}
+SELECT * FROM {{ ref('dim_products') }}
 {% endsnapshot %}

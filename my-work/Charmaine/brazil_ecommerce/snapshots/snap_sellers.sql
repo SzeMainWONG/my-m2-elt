@@ -4,10 +4,10 @@
 {{
     config(
         target_schema='snapshots',
-        unique_key='id',
+        unique_key='seller_id',
         strategy='check',
-        check_cols=['seller_city', 'seller_state', 'seller_zip_code_prefix', 'zip_codes_match'],
+        check_cols=['seller_id', 'seller_city', 'seller_state', 'seller_zip_code_prefix', 'zip_codes_match'],
     )
 }}
-SELECT * FROM {{ ref('dim_sellers') }}
+SELECT * FROM {{ ref('stg_sellers') }}
 {% endsnapshot %}

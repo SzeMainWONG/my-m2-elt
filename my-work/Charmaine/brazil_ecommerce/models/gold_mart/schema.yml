@@ -1,0 +1,219 @@
+version: 2
+
+# The following schema works with dbt-core > 1.10 and above
+# Comment the line 'arguments:' to work on older versions of dbt (dbt-core < 1.10 and below)
+
+models:
+  - name: dim_customers
+    description: "Dimension table for customers."
+    columns:
+      - name: id
+        description: "The primary key for this table"
+        data_tests:
+          - unique
+          - not_null
+  - name: dim_products
+    description: "Dimension table for products."
+    columns:
+      - name: id
+        description: "The primary key for this table"
+        data_tests:
+          - unique
+          - not_null
+  - name: dim_reviews
+    description: "Dimension table for reviews."
+    columns:
+      - name: id
+        description: "The primary key for this table"
+        data_tests:
+          - unique
+          - not_null
+  - name: dim_sellers
+    description: "Dimension table for sellers."
+    columns:
+      - name: id
+        description: "The primary key for this table"
+        data_tests:
+          - unique
+          - not_null
+
+
+  - name: fact_orders
+    description: "Fact table for orders at order-item grain"
+   
+    columns:
+      - name: id
+        description: "One of composite primary keys for this table"
+        data_tests:
+          - not_null
+          - relationships:
+              to: ref('dim_reviews')
+              field: order_id
+              severity: warn   # not every order gets a review
+          - dbt_expectations.expect_column_values_to_be_of_type:
+              column_type: STRING
+      
+      - name: customer_id
+        description: "The foreign key to dim_customers"
+        data_tests:
+          - not_null    # This should never be NULL, as every order must have a customer
+          - relationships:
+              to: ref('dim_customers')
+              field: id
+#              severity: warn  # ← source data has orphaned customer_id
+          - dbt_expectations.expect_column_values_to_be_of_type:
+              column_type: STRING
+      
+      - name: order_status
+        description: "The status of the order"
+        data_tests:
+          - dbt_expectations.expect_column_values_to_be_in_set:
+              value_set: ['approved', 'canceled', 'created', 'delivered', 'invoiced', 'processing', 'shipped', 'unavailable']
+      
+      - name: order_purchase_timestamp
+        description: "The timestamp when the order was purchased"
+        data_tests:
+          - dbt_expectations.expect_column_values_to_be_of_type:
+              column_type: TIMESTAMP
+#          - dbt_expectations.expect_column_values_to_be_greater_than_or_equal_to:
+#              min_value: "2016-09-04 21:15:19"  #  'UTC'
+      
+      - name: order_approved_at
+        description: "The timestamp when the order was approved"
+        data_tests:
+          - dbt_expectations.expect_column_values_to_be_of_type:
+              column_type: TIMESTAMP
+      
+      - name: order_delivered_carrier_date
+        description: "The timestamp when delivered by the carrier"
+        data_tests:
+          - dbt_expectations.expect_column_values_to_be_of_type:
+              column_type: TIMESTAMP
+      
+      - name: order_delivered_customer_date
+        description: "The timestamp when delivered to the customer"
+        data_tests:
+          - dbt_expectations.expect_column_values_to_be_of_type:
+              column_type: TIMESTAMP
+      
+      - name: order_estimated_delivery_date
+        description: "The timestamp estimated to be delivered"
+        data_tests:
+          - dbt_expectations.expect_column_values_to_be_of_type:
+              column_type: TIMESTAMP
+      
+      - name: order_item_id
+        description: "One of composite primary keys for this table"
+        data_tests:
+#          - not_null # This should be nullable because some orders have no items (e.g. canceled orders)
+          - dbt_expectations.expect_column_values_to_be_of_type:
+              column_type: INT64
+
+      - name: product_id
+        description: "The foreign key to dim_products"
+        data_tests:
+#          - not_null # This should be nullable because some orders have no items (e.g. canceled orders)
+#          - dbt_expectations.expect_column_values_to_not_be_null:
+#              row_condition: "order_item_id IS NOT NULL"
+#              severity: warn
+          - relationships:
+              to: ref('dim_products')
+              field: id
+#              severity: warn
+          - dbt_expectations.expect_column_values_to_be_of_type:
+              column_type: STRING
+      
+      - name: seller_id
+        description: "The foreign key to dim_sellers"
+        data_tests:
+#          - not_null # This should be nullable because some orders have no items (e.g. canceled orders)
+#          - dbt_expectations.expect_column_values_to_not_be_null:
+#            row_condition: "order_item_id IS NOT NULL"  # Only test when order has items
+#            severity: warn
+          - relationships:
+              to: ref('dim_sellers')
+              field: id
+#              severity: warn  # Change from error to warn 
+          - dbt_expectations.expect_column_values_to_be_of_type:
+              column_type: STRING
+
+      - name: shipping_limit_date
+        description: "The timestamp on item's shipping limit date"
+        data_tests:
+          - dbt_expectations.expect_column_values_to_be_of_type:
+              column_type: TIMESTAMP
+      
+      - name: price
+        description: "The price of the item"
+        data_tests:
+          - dbt_expectations.expect_column_values_to_be_of_type:
+              column_type: FLOAT64
+          #logic
+          - dbt_expectations.expect_column_values_to_be_between:
+              min_value: 0
+              severity: warn
+      
+      - name: freight_value
+        description: "The freight value of the item"
+        data_tests:
+          - dbt_expectations.expect_column_values_to_be_of_type:
+              column_type: FLOAT64
+      
+      - name: payment_sequential
+        description: "The number of times payment has been attempted for the order"
+        data_tests:
+          - dbt_expectations.expect_column_values_to_be_of_type:
+              column_type: INT64
+      
+      - name: payment_type
+        description: "The type of payment used for the order"
+        data_tests:
+          - dbt_expectations.expect_column_values_to_be_in_set:
+              value_set: ['boleto', 'credit_card', 'debit_card', 'voucher', 'not_defined']
+      
+      - name: payment_installments
+        description: "The number of installments for the payment"
+        data_tests:
+          - dbt_expectations.expect_column_values_to_be_of_type:
+              column_type: INT64
+      
+      - name: payment_value
+        description: "The total payment value for the order"
+        data_tests:
+          - dbt_expectations.expect_column_values_to_be_of_type:
+              column_type: FLOAT64
+          #logic
+          - dbt_expectations.expect_column_values_to_be_between:
+              min_value: 0
+              row_condition: "payment_value IS NOT NULL"
+              severity: warn
+
+    # Composite primary key test - combination of id and order_item_id must be unique
+    data_tests:
+      - dbt_utils.unique_combination_of_columns:
+          combination_of_columns:
+            - id
+            - order_item_id
+      #logic
+      - dbt_expectations.expect_column_pair_values_A_to_be_greater_than_B:
+          column_A: order_delivered_customer_date
+          column_B: order_purchase_timestamp
+          or_equal: false
+          row_condition: "order_delivered_customer_date IS NOT NULL"
+          severity: warn
+
+      # Data-quality flag columns
+      - name: has_invalid_delivery_date
+        description: "TRUE when the order was delivered before it was purchased."
+      - name: is_overdue_delivery
+        description: "TRUE when estimated delivery passed but the order was never delivered."
+      - name: is_high_value_product
+        description: "TRUE when the item price exceeds R$10,000."
+      - name: has_missing_delivery_date
+        description: "TRUE when status is 'delivered' but no delivery date is recorded."
+      - name: is_long_delivery
+        description: "TRUE when delivery took more than 30 days."
+      - name: has_missing_payment_info
+        description: "TRUE when payment_type is 'not_defined' or payment_value is null."
+      - name: has_no_items
+        description: "TRUE when the order has no matching line item."

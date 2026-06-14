@@ -2,3 +2,20 @@
 target/
 dbt_packages/
 logs/
+
+notes/
+environment/
+.env
+
+# Python
+__pycache__/
+*.pyc
+.venv/
+venv/
+
+# OS/editor cruft
+.DS_Store
+.vscode/
+
+# Streamlit
+.streamlit/secrets.toml

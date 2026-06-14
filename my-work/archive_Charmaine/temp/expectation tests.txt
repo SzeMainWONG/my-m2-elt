@@ -1,0 +1,488 @@
+version: 2
+
+models:
+  # ============================================
+  # FACT TABLES
+  # ============================================
+  
+  - name: fact_orders_stage
+    description: "Fact table for orders"
+    config:
+      contract:
+        enforced: true
+      tags: ["fact", "core"]
+    
+    columns:
+      # Primary Key
+      - name: id
+        description: "Order ID (Primary Key)"
+        data_type: string
+        constraints:
+          - type: not_null
+        tests:
+          - unique
+          - not_null
+          - dbt_expectations.expect_column_values_to_be_of_type:
+              column_type: string
+      
+      # Foreign Keys
+      - name: customer_id
+        description: "Foreign key to dim_customers"
+        data_type: string
+        constraints:
+          - type: not_null
+        tests:
+          - not_null
+          - dbt_expectations.expect_column_values_to_be_of_type:
+              column_type: string
+          - relationships:
+              to: ref('dim_customers')
+              field: id
+              config:
+                severity: error
+      
+      # Degenerate Dimensions
+      - name: order_status
+        description: "Order status"
+        data_type: string
+        tests:
+          - not_null
+          - dbt_expectations.expect_column_values_to_be_of_type:
+              column_type: string
+          - accepted_values:
+              values: ['delivered', 'shipped', 'approved', 'canceled', 
+                       'unavailable', 'invoiced', 'processing', 'created']
+      
+      # Timestamp Measures
+      - name: order_purchase_timestamp
+        data_type: timestamp
+        tests:
+          - not_null
+          - dbt_expectations.expect_column_values_to_be_of_type:
+              column_type: timestamp
+#          - dbt_expectations.expect_column_values_to_be_between:
+#              min_value: "2016-01-01 00:00:00"
+#              max_value: "2025-12-31 23:59:59"
+      
+      - name: order_approved_at
+        data_type: timestamp
+        tests:
+          - dbt_expectations.expect_column_values_to_be_of_type:
+              column_type: timestamp
+      
+      - name: order_delivered_carrier_date
+        data_type: timestamp
+        tests:
+          - dbt_expectations.expect_column_values_to_be_of_type:
+              column_type: timestamp
+      
+      - name: order_delivered_customer_date
+        data_type: timestamp
+        tests:
+          - dbt_expectations.expect_column_values_to_be_of_type:
+              column_type: timestamp
+      
+      - name: order_estimated_delivery_date
+        data_type: timestamp
+        tests:
+          - dbt_expectations.expect_column_values_to_be_of_type:
+              column_type: timestamp
+    
+    # Business Logic Tests (Optional)
+    data_tests:
+      - dbt_expectations.expect_column_pair_values_A_to_be_greater_than_B:
+          column_A: order_delivered_customer_date
+          column_B: order_purchase_timestamp
+          or_equal: False
+          config:
+            severity: warn
+            enabled: false  # Optional: enable if needed
+      
+      - dbt_expectations.expect_column_pair_values_A_to_be_greater_than_B:
+          column_A: order_approved_at
+          column_B: order_purchase_timestamp
+          or_equal: True
+          config:
+            severity: warn
+            enabled: false
+
+
+  # ============================================
+  # DIMENSION TABLES
+  # ============================================
+  
+  - name: dim_customers
+    description: "Customer dimension table"
+    config:
+      contract:
+        enforced: true
+      tags: ["dimension", "core"]
+    
+    columns:
+      - name: id
+        description: "Customer ID (Primary Key)"
+        data_type: string
+        tests:
+          - unique
+          - not_null
+          - dbt_expectations.expect_column_values_to_be_of_type:
+              column_type: string
+      
+      - name: customer_zip_code_prefix
+        description: "Customer zip code prefix"
+        data_type: string
+        tests:
+          - not_null
+          - dbt_expectations.expect_column_values_to_be_of_type:
+              column_type: string
+          - dbt_expectations.expect_column_values_to_match_regex:
+              regex: '^\d{5}$'
+              config:
+                severity: warn
+      
+      - name: customer_city
+        data_type: string
+        tests:
+          - not_null
+          - dbt_expectations.expect_column_values_to_be_of_type:
+              column_type: string
+      
+      - name: customer_state
+        data_type: string
+        tests:
+          - not_null
+          - dbt_expectations.expect_column_values_to_be_of_type:
+              column_type: string
+          - accepted_values:
+              values: ['SP', 'RJ', 'MG', 'RS', 'BA', 'PR', 'SC', 'PE', 'CE', 'ES', 'GO', 'MT', 'MS', 'PA', 'MA']
+              quote: false
+  
+  - name: dim_sellers
+    description: "Seller dimension table"
+    config:
+      contract:
+        enforced: true
+      tags: ["dimension", "core"]
+    
+    columns:
+      - name: id
+        description: "Seller ID (Primary Key)"
+        data_type: string
+        tests:
+          - unique
+          - not_null
+          - dbt_expectations.expect_column_values_to_be_of_type:
+              column_type: string
+      
+      - name: seller_zip_code_prefix
+        data_type: string
+        tests:
+          - not_null
+          - dbt_expectations.expect_column_values_to_be_of_type:
+              column_type: string
+          - dbt_expectations.expect_column_values_to_match_regex:
+              regex: '^\d{5}$'
+              config:
+                severity: warn
+      
+      - name: seller_city
+        data_type: string
+        tests:
+          - not_null
+          - dbt_expectations.expect_column_values_to_be_of_type:
+              column_type: string
+      
+      - name: seller_state
+        data_type: string
+        tests:
+          - not_null
+          - dbt_expectations.expect_column_values_to_be_of_type:
+              column_type: string
+          - accepted_values:
+              values: ['SP', 'RJ', 'MG', 'RS', 'BA', 'PR', 'SC', 'PE', 'CE', 'ES', 'GO', 'MT', 'MS', 'PA', 'MA']
+              quote: false
+      
+      - name: geolocation_lat
+        data_type: float
+        tests:
+          - dbt_expectations.expect_column_values_to_be_of_type:
+              column_type: float
+          - dbt_expectations.expect_column_values_to_be_between:
+              min_value: -33.75
+              max_value: 5.27
+              config:
+                severity: warn
+      
+      - name: geolocation_lng
+        data_type: float
+        tests:
+          - dbt_expectations.expect_column_values_to_be_of_type:
+              column_type: float
+          - dbt_expectations.expect_column_values_to_be_between:
+              min_value: -73.98
+              max_value: -34.79
+              config:
+                severity: warn
+      
+      - name: geolocation_city
+        data_type: string
+        tests:
+          - dbt_expectations.expect_column_values_to_be_of_type:
+              column_type: string
+      
+      - name: geolocation_state
+        data_type: string
+        tests:
+          - dbt_expectations.expect_column_values_to_be_of_type:
+              column_type: string
+          - accepted_values:
+              values: ['SP', 'RJ', 'MG', 'RS', 'BA', 'PR', 'SC', 'PE', 'CE', 'ES', 'GO', 'MT', 'MS', 'PA', 'MA']
+              quote: false
+  
+  - name: dim_products
+    description: "Product dimension table"
+    config:
+      contract:
+        enforced: true
+      tags: ["dimension", "core"]
+    
+    columns:
+      - name: id
+        description: "Product ID (Primary Key)"
+        data_type: string
+        tests:
+          - unique
+          - not_null
+          - dbt_expectations.expect_column_values_to_be_of_type:
+              column_type: string
+      
+      - name: product_category_name
+        data_type: string
+        tests:
+          - dbt_expectations.expect_column_values_to_be_of_type:
+              column_type: string
+          - accepted_values:
+              values: ['electronics', 'clothing', 'home_appliances', 'books', 
+                       'beauty', 'sports', 'toys', 'automotive', 'furniture']
+              config:
+                severity: warn
+      
+      - name: product_name_length
+        data_type: integer
+        tests:
+          - dbt_expectations.expect_column_values_to_be_of_type:
+              column_type: integer
+          - dbt_expectations.expect_column_values_to_be_between:
+              min_value: 0
+              max_value: 100
+      
+      - name: product_description_length
+        data_type: integer
+        tests:
+          - dbt_expectations.expect_column_values_to_be_of_type:
+              column_type: integer
+          - dbt_expectations.expect_column_values_to_be_between:
+              min_value: 0
+              max_value: 5000
+      
+      - name: product_photos_qty
+        data_type: integer
+        tests:
+          - dbt_expectations.expect_column_values_to_be_of_type:
+              column_type: integer
+          - dbt_expectations.expect_column_values_to_be_between:
+              min_value: 0
+              max_value: 100
+      
+      - name: product_weight_g
+        data_type: integer
+        tests:
+          - dbt_expectations.expect_column_values_to_be_of_type:
+              column_type: integer
+          - dbt_expectations.expect_column_values_to_be_between:
+              min_value: 0
+              max_value: 50000
+      
+      - name: product_length_cm
+        data_type: integer
+        tests:
+          - dbt_expectations.expect_column_values_to_be_of_type:
+              column_type: integer
+          - dbt_expectations.expect_column_values_to_be_between:
+              min_value: 0
+              max_value: 200
+      
+      - name: product_height_cm
+        data_type: integer
+        tests:
+          - dbt_expectations.expect_column_values_to_be_of_type:
+              column_type: integer
+          - dbt_expectations.expect_column_values_to_be_between:
+              min_value: 0
+              max_value: 200
+      
+      - name: product_width_cm
+        data_type: integer
+        tests:
+          - dbt_expectations.expect_column_values_to_be_of_type:
+              column_type: integer
+          - dbt_expectations.expect_column_values_to_be_between:
+              min_value: 0
+              max_value: 200
+      
+      - name: string_field_1
+        data_type: string
+        tests:
+          - dbt_expectations.expect_column_values_to_be_of_type:
+              column_type: string
+          - dbt_expectations.expect_column_values_to_not_be_null:
+              config:
+                severity: warn
+                enabled: false  # Optional: enable if this column should not be null
+  
+  - name: dim_reviews
+    description: "Reviews dimension table"
+    config:
+      contract:
+        enforced: true
+      tags: ["dimension", "optional"]
+    
+    columns:
+      - name: id
+        description: "Review ID (Primary Key)"
+        data_type: string
+        tests:
+          - unique
+          - not_null
+          - dbt_expectations.expect_column_values_to_be_of_type:
+              column_type: string
+      
+      - name: review_score
+        data_type: integer
+        tests:
+          - not_null
+          - dbt_expectations.expect_column_values_to_be_of_type:
+              column_type: integer
+          - dbt_expectations.expect_column_values_to_be_between:
+              min_value: 1
+              max_value: 5
+      
+      - name: review_comment_title
+        data_type: string
+        tests:
+          - dbt_expectations.expect_column_values_to_be_of_type:
+              column_type: string
+          - dbt_expectations.expect_column_values_to_match_regex:
+              regex: '^[A-Za-z0-9\s]{0,100}$'
+              config:
+                severity: warn
+                enabled: false
+      
+      - name: review_comment_message
+        data_type: string
+        tests:
+          - dbt_expectations.expect_column_values_to_be_of_type:
+              column_type: string
+      
+      - name: review_creation_date
+        data_type: date
+        tests:
+          - not_null
+          - dbt_expectations.expect_column_values_to_be_of_type:
+              column_type: date
+          - dbt_expectations.expect_column_values_to_be_between:
+              min_value: "2016-01-01"
+              max_value: "2025-12-31"
+      
+      - name: review_answer_timestamp
+        data_type: timestamp
+        tests:
+          - dbt_expectations.expect_column_values_to_be_of_type:
+              column_type: timestamp
+
+
+# ============================================
+# CROSS-MODEL RELATIONSHIP TESTS
+# ============================================
+
+models:
+  - name: fact_orders
+    data_tests:
+      # Test that all customer_id in fact_orders exist in dim_customers
+      - dbt_expectations.expect_column_values_to_match_foreign_key:
+          column_name: customer_id
+          foreign_model: ref('dim_customers')
+          foreign_column: id
+          config:
+            severity: error
+      
+      # Optional: Test review relationship if fact_reviews exists
+      - relationships:
+          to: ref('dim_reviews')
+          field: id
+          config:
+            enabled: false  # Only enable if fact_orders has review_id column
+
+
+# ============================================
+# ADDITIONAL LOGICAL TESTS (OPTIONAL)
+# ============================================
+
+data_tests:
+  - name: customer_city_state_consistency
+    description: "Customer city should match state location"
+    config:
+      severity: warn
+      tags: ["business_logic", "optional"]
+      enabled: false
+    model: ref('dim_customers')
+    assertion: |
+      CASE 
+        WHEN customer_city = 'sao paulo' AND customer_state != 'SP' THEN 'fail'
+        WHEN customer_city = 'rio de janeiro' AND customer_state != 'RJ' THEN 'fail'
+        WHEN customer_city = 'belo horizonte' AND customer_state != 'MG' THEN 'fail'
+        ELSE 'pass'
+      END = 'pass'
+  
+  - name: seller_geolocation_consistency
+    description: "Seller geolocation should match seller city and state"
+    config:
+      severity: warn
+      tags: ["business_logic", "optional"]
+      enabled: false
+    model: ref('dim_sellers')
+    assertion: |
+      CASE 
+        WHEN LOWER(geolocation_city) != LOWER(seller_city) 
+             AND geolocation_city IS NOT NULL 
+             AND seller_city IS NOT NULL
+        THEN 'warn'
+        ELSE 'pass'
+      END = 'pass'
+  
+  - name: review_score_range_check
+    description: "Review scores should be between 1 and 5"
+    config:
+      severity: error
+      tags: ["data_quality", "optional"]
+    model: ref('dim_reviews')
+    assertion: |
+      CASE 
+        WHEN review_score < 1 OR review_score > 5 THEN 'fail'
+        ELSE 'pass'
+      END = 'pass'
+  
+  - name: product_dimensions_positive
+    description: "Product dimensions should be positive values"
+    config:
+      severity: warn
+      tags: ["data_quality", "optional"]
+    model: ref('dim_products')
+    assertion: |
+      CASE 
+        WHEN product_length_cm < 0 
+             OR product_height_cm < 0 
+             OR product_width_cm < 0 
+        THEN 'fail'
+        ELSE 'pass'
+      END = 'pass'

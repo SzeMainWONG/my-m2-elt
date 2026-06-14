@@ -1,0 +1,153 @@
+version: 2
+
+# The following schema works with dbt-core > 1.10 and above
+# Comment the line 'arguments:' to work on older versions of dbt (dbt-core < 1.10 and below)
+
+models:
+  - name: fact_orders_stage
+    description: "Fact table for orders at order-item grain"
+    
+    columns:
+      - name: id
+        description: "One of composite primary keys for this table"
+        tests:
+          - not_null
+          - relationships:
+              to: ref('dim_reviews')
+              field: order_id
+              severity: warn   # not every order gets a review
+          - dbt_expectations.expect_column_values_to_be_of_type:
+              column_type: STRING
+      
+      - name: customer_id
+        description: "The foreign key to dim_customers"
+        tests:
+          - not_null    # This should never be NULL, as every order must have a customer
+          - relationships:
+              to: ref('dim_customers')
+              field: id
+#              severity: warn  # ← source data has orphaned customer_id
+          - dbt_expectations.expect_column_values_to_be_of_type:
+              column_type: STRING
+      
+      - name: order_status
+        description: "The status of the order"
+        tests:
+          - dbt_expectations.expect_column_values_to_be_in_set:
+              value_set: ['approved', 'canceled', 'created', 'delivered', 'invoiced', 'processing', 'shipped', 'unavailable']
+      
+      - name: order_purchase_timestamp
+        description: "The timestamp when the order was purchased"
+        tests:
+          - dbt_expectations.expect_column_values_to_be_of_type:
+              column_type: TIMESTAMP
+#          - dbt_expectations.expect_column_values_to_be_greater_than_or_equal_to:
+#              min_value: "2016-09-04 21:15:19"  #  'UTC'
+      
+      - name: order_approved_at
+        description: "The timestamp when the order was approved"
+        tests:
+          - dbt_expectations.expect_column_values_to_be_of_type:
+              column_type: TIMESTAMP
+      
+      - name: order_delivered_carrier_date
+        description: "The timestamp when delivered by the carrier"
+        tests:
+          - dbt_expectations.expect_column_values_to_be_of_type:
+              column_type: TIMESTAMP
+      
+      - name: order_delivered_customer_date
+        description: "The timestamp when delivered to the customer"
+        tests:
+          - dbt_expectations.expect_column_values_to_be_of_type:
+              column_type: TIMESTAMP
+      
+      - name: order_estimated_delivery_date
+        description: "The timestamp estimated to be delivered"
+        tests:
+          - dbt_expectations.expect_column_values_to_be_of_type:
+              column_type: TIMESTAMP
+      
+      - name: order_item_id
+        description: "One of composite primary keys for this table"
+        tests:
+#          - not_null # This should be nullable because some orders have no items (e.g. canceled orders)
+          - dbt_expectations.expect_column_values_to_be_of_type:
+              column_type: INT64
+
+      - name: product_id
+        description: "The foreign key to dim_products"
+        tests:
+#          - not_null # This should be nullable because some orders have no items (e.g. canceled orders)
+#          - dbt_expectations.expect_column_values_to_not_be_null:
+#              row_condition: "order_item_id IS NOT NULL"
+#              severity: warn
+          - relationships:
+              to: ref('dim_products')
+              field: id
+#              severity: warn
+          - dbt_expectations.expect_column_values_to_be_of_type:
+              column_type: STRING
+      
+      - name: seller_id
+        description: "The foreign key to dim_sellers"
+        tests:
+#          - not_null # This should be nullable because some orders have no items (e.g. canceled orders)
+#          - dbt_expectations.expect_column_values_to_not_be_null:
+#            row_condition: "order_item_id IS NOT NULL"  # Only test when order has items
+#            severity: warn
+          - relationships:
+              to: ref('dim_sellers')
+              field: id
+#              severity: warn  # Change from error to warn 
+          - dbt_expectations.expect_column_values_to_be_of_type:
+              column_type: STRING
+
+      - name: shipping_limit_date
+        description: "The timestamp on item's shipping limit date"
+        tests:
+          - dbt_expectations.expect_column_values_to_be_of_type:
+              column_type: TIMESTAMP
+      
+      - name: price
+        description: "The price of the item"
+        tests:
+          - dbt_expectations.expect_column_values_to_be_of_type:
+              column_type: FLOAT64
+      
+      - name: freight_value
+        description: "The freight value of the item"
+        tests:
+          - dbt_expectations.expect_column_values_to_be_of_type:
+              column_type: FLOAT64
+      
+      - name: payment_sequential
+        description: "The number of times payment has been attempted for the order"
+        tests:
+          - dbt_expectations.expect_column_values_to_be_of_type:
+              column_type: INT64
+      
+      - name: payment_type
+        description: "The type of payment used for the order"
+        tests:
+          - dbt_expectations.expect_column_values_to_be_in_set:
+              value_set: ['boleto', 'credit_card', 'debit_card', 'voucher', 'not_defined']
+      
+      - name: payment_installments
+        description: "The number of installments for the payment"
+        tests:
+          - dbt_expectations.expect_column_values_to_be_of_type:
+              column_type: INT64
+      
+      - name: payment_value
+        description: "The total payment value for the order"
+        tests:
+          - dbt_expectations.expect_column_values_to_be_of_type:
+              column_type: FLOAT64
+
+    # Composite primary key test - combination of id and order_item_id must be unique
+    data_tests:
+      - dbt_utils.unique_combination_of_columns:
+          combination_of_columns:
+            - id
+            - order_item_id

@@ -1,153 +1,78 @@
 version: 2
 
-# The following schema works with dbt-core > 1.10 and above
-# Comment the line 'arguments:' to work on older versions of dbt (dbt-core < 1.10 and below)
+# Staging = 1:1 dedup of bronze. Tests assert each PK is unique + not_null,
+# which is exactly what the dedup guarantees. Business-logic tests live in gold_mart.
 
 models:
-  - name: fact_orders_stage
-    description: "Fact table for orders at order-item grain"
-    
+  - name: stg_customers
+    description: "Deduplicated, one row per customer_id (no nulls). Cleaned."
     columns:
-      - name: id
-        description: "One of composite primary keys for this table"
-        tests:
-          - not_null
-          - relationships:
-              to: ref('dim_reviews')
-              field: order_id
-              severity: warn   # not every order gets a review
-          - dbt_expectations.expect_column_values_to_be_of_type:
-              column_type: STRING
-      
       - name: customer_id
-        description: "The foreign key to dim_customers"
-        tests:
-          - not_null    # This should never be NULL, as every order must have a customer
-          - relationships:
-              to: ref('dim_customers')
-              field: id
-#              severity: warn  # ← source data has orphaned customer_id
-          - dbt_expectations.expect_column_values_to_be_of_type:
-              column_type: STRING
-      
-      - name: order_status
-        description: "The status of the order"
-        tests:
-          - dbt_expectations.expect_column_values_to_be_in_set:
-              value_set: ['approved', 'canceled', 'created', 'delivered', 'invoiced', 'processing', 'shipped', 'unavailable']
-      
-      - name: order_purchase_timestamp
-        description: "The timestamp when the order was purchased"
-        tests:
-          - dbt_expectations.expect_column_values_to_be_of_type:
-              column_type: TIMESTAMP
-#          - dbt_expectations.expect_column_values_to_be_greater_than_or_equal_to:
-#              min_value: "2016-09-04 21:15:19"  #  'UTC'
-      
-      - name: order_approved_at
-        description: "The timestamp when the order was approved"
-        tests:
-          - dbt_expectations.expect_column_values_to_be_of_type:
-              column_type: TIMESTAMP
-      
-      - name: order_delivered_carrier_date
-        description: "The timestamp when delivered by the carrier"
-        tests:
-          - dbt_expectations.expect_column_values_to_be_of_type:
-              column_type: TIMESTAMP
-      
-      - name: order_delivered_customer_date
-        description: "The timestamp when delivered to the customer"
-        tests:
-          - dbt_expectations.expect_column_values_to_be_of_type:
-              column_type: TIMESTAMP
-      
-      - name: order_estimated_delivery_date
-        description: "The timestamp estimated to be delivered"
-        tests:
-          - dbt_expectations.expect_column_values_to_be_of_type:
-              column_type: TIMESTAMP
-      
-      - name: order_item_id
-        description: "One of composite primary keys for this table"
-        tests:
-#          - not_null # This should be nullable because some orders have no items (e.g. canceled orders)
-          - dbt_expectations.expect_column_values_to_be_of_type:
-              column_type: INT64
+        description: "Primary key."
+        data_tests: [unique, not_null]
 
+  - name: stg_orders
+    description: "Deduplicated, one row per order_id (no nulls). Cleaned"
+    columns:
+      - name: order_id
+        description: "One of composite Primary Key."
+        data_tests: [unique, not_null]
+#      - name: order_item_id
+#        description: "Part of the composite PK (line number within the order)."
+#      - name: payment_sequential
+#        description: "Part of the composite PK (payment number within the order)."
+
+  - name: stg_reviews
+    description: "Deduplicated, one row per review_id (no nulls). Cleaned."
+    columns:
+      - name: review_id
+        description: "Primary key."
+        data_tests: [unique, not_null]
+        #logic
+      - name: review_score
+        data_tests:
+          - dbt_expectations.expect_column_values_to_be_between:
+              min_value: 1
+              max_value: 5
+
+  - name: stg_products
+    description: "Deduplicated, one row per product_id (no nulls). Cleaned."
+    columns:
       - name: product_id
-        description: "The foreign key to dim_products"
-        tests:
-#          - not_null # This should be nullable because some orders have no items (e.g. canceled orders)
-#          - dbt_expectations.expect_column_values_to_not_be_null:
-#              row_condition: "order_item_id IS NOT NULL"
-#              severity: warn
-          - relationships:
-              to: ref('dim_products')
-              field: id
-#              severity: warn
-          - dbt_expectations.expect_column_values_to_be_of_type:
-              column_type: STRING
-      
+        description: "Primary key."
+        data_tests: [unique, not_null]
+
+  - name: stg_sellers
+    description: "Deduplicated, one row per seller_id (no nulls). Cleaned."
+    columns:
       - name: seller_id
-        description: "The foreign key to dim_sellers"
-        tests:
-#          - not_null # This should be nullable because some orders have no items (e.g. canceled orders)
-#          - dbt_expectations.expect_column_values_to_not_be_null:
-#            row_condition: "order_item_id IS NOT NULL"  # Only test when order has items
-#            severity: warn
-          - relationships:
-              to: ref('dim_sellers')
-              field: id
-#              severity: warn  # Change from error to warn 
-          - dbt_expectations.expect_column_values_to_be_of_type:
-              column_type: STRING
+        description: "Primary key."
+        data_tests: [unique, not_null]
 
-      - name: shipping_limit_date
-        description: "The timestamp on item's shipping limit date"
-        tests:
-          - dbt_expectations.expect_column_values_to_be_of_type:
-              column_type: TIMESTAMP
-      
-      - name: price
-        description: "The price of the item"
-        tests:
-          - dbt_expectations.expect_column_values_to_be_of_type:
-              column_type: FLOAT64
-      
-      - name: freight_value
-        description: "The freight value of the item"
-        tests:
-          - dbt_expectations.expect_column_values_to_be_of_type:
-              column_type: FLOAT64
-      
+  - name: stg_geolocation
+    description: "No deduplication. No nulls. Cleaned."
+    columns:
+      - name: geolocation_zip_code_prefix
+        description: "Primary key (collapsed to one lat/lng per zip)."
+
+  - name: stg_order_items
+    description: "No deduplication. No nulls. Cleaned."
+    columns:
+      - name: order_id
+        description: "One of composite Primary Key."
+      - name: order_item_id
+        description: "Part of the composite PK (line number within the order)."
+
+  - name: stg_order_payments
+    description: "No deduplication. No nulls. Cleaned."
+    columns:
+      - name: order_id
+        description: "One of composite Primary Key."
       - name: payment_sequential
-        description: "The number of times payment has been attempted for the order"
-        tests:
-          - dbt_expectations.expect_column_values_to_be_of_type:
-              column_type: INT64
-      
-      - name: payment_type
-        description: "The type of payment used for the order"
-        tests:
-          - dbt_expectations.expect_column_values_to_be_in_set:
-              value_set: ['boleto', 'credit_card', 'debit_card', 'voucher', 'not_defined']
-      
-      - name: payment_installments
-        description: "The number of installments for the payment"
-        tests:
-          - dbt_expectations.expect_column_values_to_be_of_type:
-              column_type: INT64
-      
-      - name: payment_value
-        description: "The total payment value for the order"
-        tests:
-          - dbt_expectations.expect_column_values_to_be_of_type:
-              column_type: FLOAT64
+        description: "Part of the composite PK (payment number within the order)."
 
-    # Composite primary key test - combination of id and order_item_id must be unique
-    data_tests:
-      - dbt_utils.unique_combination_of_columns:
-          combination_of_columns:
-            - id
-            - order_item_id
+# No tests on stg_order_items and stg_order_payments because 
+# they will be merged with stg_orders in gold_mart, and the business-logic tests will be there.
+
+# No tests on stg_geolocation because it will be merged with stg_customers/sellers in gold_mart, 
+# and the business-logic tests will be there.

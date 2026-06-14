@@ -59,7 +59,3 @@ data/
 **/.meltano/
 **/.tmp_dagster_home*/
 **/dagster_home/
-
-**/.streamlit
-**/temp
-**/environment
